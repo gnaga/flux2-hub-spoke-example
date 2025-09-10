@@ -28,7 +28,10 @@ spec:
       enabled: false
     prometheus:
       prometheusSpec:
-        additionalScrapeConfigsSecret: "flux-prometheus-federation"
+        additionalScrapeConfigsSecret:
+          enabled: true
+          name: "flux-prometheus-federation"
+          key: "additional-scrape-configs.yaml"
         retention: 24h
         resources:
           requests:
