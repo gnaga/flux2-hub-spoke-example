@@ -22,12 +22,19 @@ spec:
   - kind: ConfigMap
     name: flux-kube-state-metrics-config
     valuesKey: kube-state-metrics-config.yaml
+  - kind: ConfigMap
+    name: flux-prometheus-federation
+    valuesKey: additional-scrape-configs.yaml
   # https://github.com/prometheus-community/helm-charts/blob/main/charts/kube-prometheus-stack/values.yaml
   values:
     alertmanager:
       enabled: false
     prometheus:
       prometheusSpec:
+        additionalScrapeConfigsSecret: ""
+        additionalScrapeConfigs:
+          name: flux-prometheus-federation
+          key: additional-scrape-configs.yaml
         retention: 24h
         resources:
           requests:
