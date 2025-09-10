@@ -1,0 +1,33 @@
+- job_name: federate-production
+  honor_labels: true
+  scrape_interval: 30s
+  metrics_path: /federate
+  params:
+    'match[]':
+      - '{job="apiserver"}'
+      - '{job="kube-state-metrics"}'
+      - '{job="kubelet"}'
+      - '{job="node-exporter"}'
+  static_configs:
+    - targets:
+      - production-prometheus.example.com
+  scheme: https
+  tls_config:
+    insecure_skip_verify: true
+- job_name: federate-staging
+  honor_labels: true
+  scrape_interval: 30s
+  metrics_path: /federate
+  params:
+    'match[]':
+      - '{job="apiserver"}'
+      - '{job="kube-state-metrics"}'
+      - '{job="kubelet"}'
+      - '{job="node-exporter"}'
+  static_configs:
+    - targets:
+      - staging-prometheus.example.com
+  scheme: https
+  tls_config:
+    insecure_skip_verify: true
+

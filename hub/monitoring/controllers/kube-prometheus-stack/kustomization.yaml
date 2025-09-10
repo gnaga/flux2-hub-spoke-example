@@ -6,6 +6,16 @@ resources:
   - repository.yaml
   - release.yaml
   - federation-scrape-config.yaml
+secretGenerator:
+  - name: flux-prometheus-federation
+    namespace: monitoring
+    files:
+      - additional-scrape-configs.yaml=federation-scrape-configs.yaml
+    options:
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/part-of: flux
+        app.kubernetes.io/component: monitoring
 configMapGenerator:
   - name: flux-kube-state-metrics-config
     files:
