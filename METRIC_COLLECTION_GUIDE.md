@@ -1,59 +1,78 @@
 # Cross-Cluster Metric Collection Setup
 
-This guide explains how the metric collection from production and staging clusters is configured and how to verify it's working.
+This guide explains how the metric collection from production and staging clusters is configured using Prometheus Remote Write and how to verify it's working.
 
 ## Overview
 
-The hub cluster's Prometheus is configured to collect metrics from both production and staging clusters using Prometheus federation. This allows centralized monitoring and alerting across all environments.
+The hub cluster's Prometheus is configured to receive metrics from both production and staging clusters using Prometheus Remote Write. This provides real-time streaming of metrics and centralized monitoring and alerting across all environments.
 
 ## Configuration Components
 
-### 1. Federation Scrape Configuration
-- **File**: `hub/monitoring/controllers/kube-prometheus-stack/federation-scrape-config.yaml`
-- **Purpose**: Configures additional scrape jobs for production and staging cluster federation
-- **Key metrics collected**:
-  - Core Kubernetes metrics (apiserver, kube-state-metrics, kubelet, node-exporter)
-  - Flux controller metrics (gotk_*, controller_runtime_*)
-  - Application metrics (up, *_total, *_duration_*, *_info)
+### 1. Hub Prometheus Remote Write Receiver
+- **File**: `hub/monitoring/controllers/kube-prometheus-stack/release.yaml`
+- **Purpose**: Configures the hub Prometheus to receive remote write metrics from other clusters
+- **Key settings**:
+  - `enableRemoteWriteReceiver: true` - Enables the /api/v1/write endpoint
+  - `remoteWriteDashboards: true` - Enables remote write monitoring dashboards
 
-### 2. Static Target Configuration
-- **File**: Embedded in `federation-scrape-config.yaml`
-- **Purpose**: Direct connection to known Prometheus services in production/staging clusters
-- **Configuration**: Uses static targets to connect to Prometheus federation endpoints
+### 2. Remote Write Configurations
+- **Directory**: `hub/monitoring/remote-write-configs/`
+- **Purpose**: Template configurations for production and staging clusters to send metrics
+- **Files**:
+  - `production-remote-write.yaml` - Production cluster configuration
+  - `staging-remote-write.yaml` - Staging cluster configuration
+  - `README.md` - Detailed setup instructions
 
 ### 3. RBAC Configuration
-- **File**: `hub/monitoring/controllers/kube-prometheus-stack/monitoring-rbac.yaml`
-- **Purpose**: Grants necessary permissions for cross-cluster metric collection
+- **File**: `hub/monitoring/controllers/kube-prometheus-stack/remote-write-rbac.yaml`
+- **Purpose**: Grants necessary permissions for remote write operations
 - **Components**:
-  - ServiceAccount: `prometheus-federation`
-  - ClusterRole: Access to services, endpoints, pods, and monitoring resources
-  - RoleBindings: Specific access to production and staging namespaces
+  - ServiceAccount: `prometheus-remote-write`
+  - ClusterRole: Access to services, endpoints, and monitoring resources
+  - ClusterRoleBinding: Binds the role to the service account
 
-### 4. Prometheus Configuration
-- **File**: `hub/monitoring/controllers/kube-prometheus-stack/release.yaml`
-- **Updates**: 
-  - Added `additionalScrapeConfigsSecret` configuration
-  - Configured `serviceAccountName` for proper RBAC
+### 4. Benefits of Remote Write over Federation
+- **Real-time streaming**: Metrics sent as collected, not on-demand
+- **Better performance**: No large queries, reduced load on source clusters
+- **More reliable**: Built-in retry and queue management
+- **Scalable**: Handles high metric volumes efficiently
 
 ## Verification Steps
 
-Once the configuration is applied, you can verify metric collection is working:
+Once the configuration is applied, you can verify remote write is working:
 
-### 1. Check Prometheus Targets
+### 1. Check Remote Write Endpoint
 ```bash
 # Port-forward to Prometheus UI
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
 
-# Open browser to http://localhost:9090
-# Navigate to Status > Targets
-# Look for federation jobs: "federate-production" and "federate-staging"
+# Test the remote write endpoint
+curl -X POST http://localhost:9090/api/v1/write \
+  -H "Content-Type: application/x-protobuf" \
+  -H "Content-Encoding: snappy" \
+  --data-binary "@/dev/null"
+# Should return 400 (bad request) but confirms endpoint exists
 ```
 
-### 2. Query Cross-Cluster Metrics
-In Prometheus UI, try these queries:
+### 2. Monitor Remote Write Status
+In Prometheus UI, check these metrics:
 
 ```promql
-# Check if metrics from both clusters are available
+# Check if remote write receiver is active
+prometheus_remote_storage_samples_total
+
+# Monitor incoming metrics from clusters
+rate(prometheus_remote_storage_samples_total[5m])
+
+# Check for any remote write errors
+prometheus_remote_storage_samples_failed_total
+```
+
+### 3. Query Cross-Cluster Metrics
+Once source clusters are configured, try these queries:
+
+```promql
+# Check metrics from both clusters (once they're sending)
 up{cluster=~"production|staging"}
 
 # Flux controller metrics from remote clusters
@@ -61,20 +80,6 @@ gotk_resource_info{cluster=~"production|staging"}
 
 # Kubernetes API server metrics
 kubernetes_build_info{cluster=~"production|staging"}
-
-# Node metrics from remote clusters
-node_info{cluster=~"production|staging"}
-```
-
-### 3. Verify Static Target Configuration
-```bash
-# Check the federation scrape configuration
-kubectl get configmap flux-prometheus-federation -n monitoring -o yaml
-
-# Look for the static_configs section with production and staging targets
-# Expected targets:
-# - kube-prometheus-stack-prometheus.production.svc.cluster.local:9090
-# - kube-prometheus-stack-prometheus.staging.svc.cluster.local:9090
 ```
 
 ### 4. Verify Federation Endpoints
@@ -102,38 +107,48 @@ kubectl run test-pod --rm -i --tty --image=curlimages/curl -- /bin/sh
 Once working, you should see these metric patterns:
 
 - **Cluster Labels**: All metrics will have a `cluster` label with values "production" or "staging"
-- **Federation Jobs**: Targets showing "federate-production" and "federate-staging" jobs
+- **Real-time Updates**: Metrics appear in hub cluster within seconds of being collected
 - **Remote Metrics**: Kubernetes and application metrics from both clusters
 - **Flux Metrics**: GitOps controller metrics from production and staging deployments
+- **Remote Write Metrics**: Monitor the remote write process itself
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **No Federation Targets**: Check if production/staging Prometheus services exist and are labeled correctly
-2. **RBAC Errors**: Verify the prometheus-federation ServiceAccount has proper permissions
-3. **Network Issues**: Ensure the hub cluster can reach production/staging cluster services
-4. **Configuration Errors**: Check Prometheus logs for scrape configuration parsing errors
+1. **Remote Write Endpoint Not Available**: Check if `enableRemoteWriteReceiver: true` is set
+2. **Connection Refused**: Verify network connectivity between clusters
+3. **Authentication Issues**: Check RBAC permissions for remote write service account
+4. **Queue Full**: Monitor `prometheus_remote_storage_queue_length` and adjust queue settings
 
 ### Debug Commands
 
 ```bash
-# Check Prometheus configuration reload
-kubectl logs -n monitoring deployment/kube-prometheus-stack-prometheus -c config-reloader
+# Check Prometheus logs for remote write receiver
+kubectl logs -n monitoring deployment/prometheus-kube-prometheus-stack-prometheus-0 -c prometheus
 
 # Verify RBAC permissions
-kubectl auth can-i get services --as=system:serviceaccount:monitoring:prometheus-federation -n production
-kubectl auth can-i get services --as=system:serviceaccount:monitoring:prometheus-federation -n staging
+kubectl auth can-i create services --as=system:serviceaccount:monitoring:prometheus-remote-write
 
-# Check service discovery
-kubectl get endpoints -n production
-kubectl get endpoints -n staging
+# Check remote write endpoint availability
+kubectl get svc -n monitoring kube-prometheus-stack-prometheus
+
+# Monitor remote write metrics
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
+# Then visit http://localhost:9090/graph and query prometheus_remote_storage_*
 ```
+
+## Setup Instructions
+
+1. **Hub Cluster**: Apply the configuration in this repository
+2. **Source Clusters**: Use configurations in `hub/monitoring/remote-write-configs/`
+3. **Network**: Ensure clusters can reach each other's Prometheus services
+4. **Monitoring**: Use provided metrics to monitor remote write health
 
 ## Notes
 
-- The configuration assumes that production and staging Prometheus instances are running in their respective namespaces
-- Metrics are collected every 30 seconds from federation endpoints  
-- The setup uses static target configuration to connect to known Prometheus services
-- Expected service names: `kube-prometheus-stack-prometheus` or `prometheus-operated`
-- All collected metrics are preserved with their original labels, plus an additional `cluster` label
+- **Remote Write Endpoint**: `/api/v1/write` is automatically enabled on port 9090
+- **Real-time Streaming**: Metrics appear within seconds (vs federation's polling)
+- **Automatic Retries**: Built-in queue management handles network issues
+- **Label Preservation**: All original labels preserved, plus `cluster` and `origin_prometheus`
+- **Scalability**: Can handle high metric volumes more efficiently than federation

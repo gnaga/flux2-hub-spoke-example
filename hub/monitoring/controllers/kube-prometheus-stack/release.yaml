@@ -28,10 +28,9 @@ spec:
       enabled: false
     prometheus:
       prometheusSpec:
-        additionalScrapeConfigsSecret:
-          enabled: true
-          name: "flux-prometheus-federation"
-          key: "additional-scrape-configs.yaml"
+        # Enable remote write receiver
+        enableRemoteWriteReceiver: true
+        remoteWriteDashboards: true
         retention: 24h
         resources:
           requests:
@@ -44,7 +43,7 @@ spec:
         podMonitorSelector:
           matchLabels:
             app.kubernetes.io/component: monitoring
-        serviceAccountName: prometheus-federation
+        serviceAccountName: prometheus-remote-write
     grafana:
       defaultDashboardsEnabled: false
       adminPassword: flux

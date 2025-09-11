@@ -5,8 +5,7 @@ resources:
   - namespace.yaml
   - repository.yaml
   - release.yaml
-  - federation-scrape-config.yaml
-  - monitoring-rbac.yaml
+  - remote-write-rbac.yaml
 configMapGenerator:
   - name: flux-kube-state-metrics-config
     files:

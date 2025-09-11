@@ -1,0 +1,71 @@
+---
+# This configuration should be applied to the staging cluster's Prometheus
+# to enable remote write to the hub cluster
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-remote-write-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: flux
+    app.kubernetes.io/component: monitoring
+    cluster: staging
+data:
+  remote-write-config.yaml: |
+    # Remote Write configuration for staging cluster
+    # This sends metrics from staging Prometheus to hub Prometheus
+    remote_write:
+      - url: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+        name: "hub-cluster"
+        # Add cluster label to all metrics
+        write_relabel_configs:
+          - target_label: cluster
+            replacement: staging
+          - target_label: origin_prometheus
+            replacement: staging
+        # Optional: Configure which metrics to send
+        metadata_config:
+          send: true
+          send_interval: 30s
+        # Queue configuration for reliability
+        queue_config:
+          capacity: 10000
+          max_shards: 50
+          min_shards: 1
+          max_samples_per_send: 2000
+          batch_send_deadline: 5s
+          min_backoff: 30ms
+          max_backoff: 5s
+          retry_on_http_429: true
+---
+# HelmRelease patch for staging cluster
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack-staging-patch
+  namespace: monitoring
+spec:
+  values:
+    prometheus:
+      prometheusSpec:
+        # Enable remote write from this cluster
+        remoteWrite:
+          - url: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+            name: "hub-cluster"
+            writeRelabelConfigs:
+              - targetLabel: cluster
+                replacement: staging
+              - targetLabel: origin_prometheus
+                replacement: staging
+            metadataConfig:
+              send: true
+              sendInterval: 30s
+            queueConfig:
+              capacity: 10000
+              maxShards: 50
+              minShards: 1
+              maxSamplesPerSend: 2000
+              batchSendDeadline: 5s
+              minBackoff: 30ms
+              maxBackoff: 5s
+              retryOnHttp429: true
