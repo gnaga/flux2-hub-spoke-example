@@ -1,10 +1,21 @@
 # Cross-Cluster Metric Collection Setup
 
-This guide explains how the metric collection from production and staging clusters is configured using Prometheus Remote Write and how to verify it's working.
+This guide explains different approaches for collecting metrics from production and staging clusters and centralizing them in the hub cluster.
 
-## Overview
+## Architecture Overview
 
-The hub cluster's Prometheus is configured to receive metrics from both production and staging clusters using Prometheus Remote Write. This provides real-time streaming of metrics and centralized monitoring and alerting across all environments.
+There are several approaches to collect metrics from production and staging clusters:
+
+### Option 1: Remote Write with Source Prometheus (Recommended)
+Deploy lightweight Prometheus instances in production/staging clusters that collect metrics and forward them to the hub cluster via Remote Write.
+
+### Option 2: Direct Scraping from Hub
+Configure the hub cluster's Prometheus to directly scrape metrics from production/staging clusters over the network.
+
+### Option 3: Pull-based with Service Discovery
+Use Prometheus service discovery to dynamically discover and scrape targets across clusters.
+
+**This guide focuses on Option 1 (Remote Write) as it provides the best performance, reliability, and scalability.**
 
 ## Configuration Components
 
@@ -31,7 +42,7 @@ The hub cluster's Prometheus is configured to receive metrics from both producti
   - ClusterRole: Access to services, endpoints, and monitoring resources
   - ClusterRoleBinding: Binds the role to the service account
 
-### 4. Benefits of Remote Write over Federation
+### 4. Benefits of Prometheus Remote Write Model
 - **Real-time streaming**: Metrics sent as collected, not on-demand
 - **Better performance**: No large queries, reduced load on source clusters
 - **More reliable**: Built-in retry and queue management
@@ -82,16 +93,16 @@ gotk_resource_info{cluster=~"production|staging"}
 kubernetes_build_info{cluster=~"production|staging"}
 ```
 
-### 4. Verify Federation Endpoints
+### 4. Verify Remote Write Endpoints
 ```bash
-# Check if federation ConfigMap is properly mounted
-kubectl get configmap flux-prometheus-federation -n monitoring -o yaml
+# Check if remote write ConfigMap is properly mounted
+kubectl get configmap flux-prometheus-remote-write -n monitoring -o yaml
 
 # Check if Prometheus can access the scrape configs
 kubectl logs -n monitoring deployment/kube-prometheus-stack-prometheus -c prometheus
 ```
 
-### 5. Test Federation Connectivity
+### 5. Test Remote Write Connectivity
 ```bash
 # Check if production/staging services are accessible from monitoring namespace
 kubectl get services -n production | grep prometheus
@@ -99,7 +110,7 @@ kubectl get services -n staging | grep prometheus
 
 # Test network connectivity (if services exist)
 kubectl run test-pod --rm -i --tty --image=curlimages/curl -- /bin/sh
-# From inside pod, test: curl http://prometheus-service.production:9090/federate
+# From inside pod, test: curl http://prometheus-service.production:9090/api/v1/write
 ```
 
 ## Expected Metrics
@@ -140,15 +151,124 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
 
 ## Setup Instructions
 
-1. **Hub Cluster**: Apply the configuration in this repository
-2. **Source Clusters**: Use configurations in `hub/monitoring/remote-write-configs/`
-3. **Network**: Ensure clusters can reach each other's Prometheus services
-4. **Monitoring**: Use provided metrics to monitor remote write health
+### Prerequisites
+**IMPORTANT**: For the Prometheus Remote Write model to work, you MUST have Prometheus instances running in both production and staging clusters to collect and forward metrics.
+
+### Deployment Steps
+
+1. **Hub Cluster**: 
+   - Deploy full kube-prometheus-stack with Grafana, AlertManager, and long-term storage
+   - Apply the configuration in this repository
+   - Enable remote write receiver (`enableRemoteWriteReceiver: true`)
+
+2. **Production Cluster**:
+   - **REQUIRED**: Deploy lightweight kube-prometheus-stack using `production-lightweight-values.yaml`
+   - This installs Prometheus for metric collection (without Grafana/AlertManager)
+   - Configure remote write to forward metrics to hub cluster
+   - Apply remote write ConfigMaps
+
+3. **Staging Cluster**:
+   - **REQUIRED**: Deploy lightweight kube-prometheus-stack using `staging-lightweight-values.yaml`
+   - This installs Prometheus for metric collection (without Grafana/AlertManager)
+   - Configure remote write to forward metrics to hub cluster
+   - Apply remote write ConfigMaps
+
+4. **Network Configuration**: Ensure clusters can reach each other's Prometheus services
+
+5. **Monitoring**: Use provided metrics to monitor remote write health
+
+## Alternative Approaches (If No Prometheus in Source Clusters)
+
+If you prefer NOT to deploy Prometheus in production/staging clusters, consider these alternatives:
+
+### Option A: Direct Scraping from Hub
+Configure the hub Prometheus to scrape metrics directly from source clusters:
+
+```yaml
+# Add to hub Prometheus configuration
+additionalScrapeConfigs:
+  - job_name: 'production-cluster'
+    kubernetes_sd_configs:
+      - api_server: 'https://production-k8s-api-server:6443'
+        role: 'pod'
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - target_label: cluster
+        replacement: production
+
+  - job_name: 'staging-cluster'
+    kubernetes_sd_configs:
+      - api_server: 'https://staging-k8s-api-server:6443'
+        role: 'pod'
+    relabel_configs:
+      - target_label: cluster
+        replacement: staging
+```
+
+**Requirements:**
+- Network connectivity from hub to source clusters
+- Proper RBAC permissions for cross-cluster access
+- Exposed metrics endpoints (node-exporter, kube-state-metrics, etc.)
+
+### Option B: Metrics Collection Agents
+Deploy lightweight metric collection agents (like Grafana Agent or Prometheus Agent):
+
+```yaml
+# Example: Grafana Agent configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-agent-config
+data:
+  config.yaml: |
+    server:
+      http_listen_port: 80
+    prometheus:
+      configs:
+      - name: production
+        scrape_configs:
+        - job_name: kubernetes-pods
+          kubernetes_sd_configs:
+          - role: pod
+        remote_write:
+        - url: http://hub-prometheus:9090/api/v1/write
+          external_labels:
+            cluster: production
+```
+
+### Option C: Flux-specific Metrics Only
+If you only need Flux GitOps metrics, configure Flux controllers to expose metrics and scrape them directly:
+
+```yaml
+# Flux controller configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flux-monitoring
+data:
+  scrape_config: |
+    - job_name: flux-system
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [flux-system]
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: "true"
+```
+
+**Recommendation**: Option 1 (Remote Write with lightweight Prometheus) is still preferred for production environments due to better reliability, performance, and feature completeness.
 
 ## Notes
 
 - **Remote Write Endpoint**: `/api/v1/write` is automatically enabled on port 9090
-- **Real-time Streaming**: Metrics appear within seconds (vs federation's polling)
+- **Real-time Streaming**: Metrics appear within seconds using the Prometheus Remote Write model
 - **Automatic Retries**: Built-in queue management handles network issues
 - **Label Preservation**: All original labels preserved, plus `cluster` and `origin_prometheus`
-- **Scalability**: Can handle high metric volumes more efficiently than federation
+- **Scalability**: Can handle high metric volumes more efficiently using the Prometheus Remote Write model
