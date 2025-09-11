@@ -52,33 +52,55 @@ echo "Hub Prometheus LoadBalancer: $LOADBALANCER_IP"
 ```
 
 ### 4. Deploy to Production Cluster
+
+#### Option A: Using the deployment script (Recommended)
 ```bash
 # Switch to production cluster context
 kubectl config use-context production-cluster
 
-# IMPORTANT: Deploy HelmRepository first to avoid "not found" errors
+# Use the deployment script that handles dependencies
+./deploy-prometheus.sh production
+```
+
+#### Option B: Manual step-by-step deployment
+```bash
+# Switch to production cluster context
+kubectl config use-context production-cluster
+
+# Step 1: Deploy HelmRepository first
 kubectl apply -f clusters/production/infra-controllers/prometheus-repository.yaml
 
-# Wait for HelmRepository to be ready
-kubectl wait --for=condition=Ready helmrepository/prometheus-community -n monitoring --timeout=300s
+# Step 2: Wait for HelmRepository to be ready
+kubectl wait --for=condition=Ready helmrepository/prometheus-community -n monitoring --timeout=60s
 
-# Apply the full configuration
-kubectl apply -k clusters/production/infra-controllers/
+# Step 3: Deploy HelmRelease
+kubectl apply -f clusters/production/infra-controllers/prometheus-community-production.yaml
 ```
 
 ### 5. Deploy to Staging Cluster
+
+#### Option A: Using the deployment script (Recommended)
 ```bash
 # Switch to staging cluster context
 kubectl config use-context staging-cluster
 
-# IMPORTANT: Deploy HelmRepository first to avoid "not found" errors
+# Use the deployment script that handles dependencies
+./deploy-prometheus.sh staging
+```
+
+#### Option B: Manual step-by-step deployment
+```bash
+# Switch to staging cluster context
+kubectl config use-context staging-cluster
+
+# Step 1: Deploy HelmRepository first
 kubectl apply -f clusters/staging/infra-controllers/prometheus-repository.yaml
 
-# Wait for HelmRepository to be ready
-kubectl wait --for=condition=Ready helmrepository/prometheus-community -n monitoring --timeout=300s
+# Step 2: Wait for HelmRepository to be ready
+kubectl wait --for=condition=Ready helmrepository/prometheus-community -n monitoring --timeout=60s
 
-# Apply the full configuration
-kubectl apply -k clusters/staging/infra-controllers/
+# Step 3: Deploy HelmRelease
+kubectl apply -f clusters/staging/infra-controllers/prometheus-community-staging.yaml
 ```
 
 ## Verification

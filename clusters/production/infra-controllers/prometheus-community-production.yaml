@@ -4,9 +4,6 @@ metadata:
   name: kube-prometheus-stack
   namespace: monitoring
 spec:
-  dependsOn:
-    - name: prometheus-community
-      namespace: monitoring
   targetNamespace: monitoring
   releaseName: kube-prometheus-stack
   interval: 30m
