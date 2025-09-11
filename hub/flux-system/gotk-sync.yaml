@@ -8,7 +8,7 @@ metadata:
 spec:
   interval: 1m0s
   ref:
-    branch: working2
+    branch: monitorallclusters
   secretRef:
     name: flux-system
   url: ssh://git@github.com/gnaga/flux2-hub-spoke-example
