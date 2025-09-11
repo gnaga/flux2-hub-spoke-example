@@ -6,7 +6,6 @@ resources:
   - repository.yaml
   - release.yaml
   - federation-scrape-config.yaml
-  - cluster-servicemonitors.yaml
   - monitoring-rbac.yaml
 configMapGenerator:
   - name: flux-kube-state-metrics-config

@@ -16,20 +16,13 @@ metadata:
     app.kubernetes.io/part-of: flux
     app.kubernetes.io/component: monitoring
 rules:
-  # Access to services and endpoints in production and staging namespaces
+  # Basic permissions for Prometheus federation scraping
   - apiGroups: [""]
-    resources: ["services", "endpoints", "pods"]
+    resources: ["services", "endpoints"]
     verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "watch"]
-  # Access to ServiceMonitors and PodMonitors across namespaces
+  # Access to monitoring resources for ServiceMonitors (if needed later)
   - apiGroups: ["monitoring.coreos.com"]
     resources: ["servicemonitors", "podmonitors", "prometheusrules"]
-    verbs: ["get", "list", "watch"]
-  # Access to discover services in target namespaces
-  - apiGroups: [""]
-    resources: ["namespaces"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -59,10 +52,7 @@ metadata:
     app.kubernetes.io/component: monitoring
 rules:
   - apiGroups: [""]
-    resources: ["services", "endpoints", "pods"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors", "podmonitors"]
+    resources: ["services", "endpoints"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -93,10 +83,7 @@ metadata:
     app.kubernetes.io/component: monitoring
 rules:
   - apiGroups: [""]
-    resources: ["services", "endpoints", "pods"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors", "podmonitors"]
+    resources: ["services", "endpoints"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

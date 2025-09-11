@@ -16,10 +16,10 @@ The hub cluster's Prometheus is configured to collect metrics from both producti
   - Flux controller metrics (gotk_*, controller_runtime_*)
   - Application metrics (up, *_total, *_duration_*, *_info)
 
-### 2. ServiceMonitors
-- **File**: `hub/monitoring/controllers/kube-prometheus-stack/cluster-servicemonitors.yaml`
-- **Purpose**: Automated discovery of Prometheus instances in production/staging namespaces
-- **Configuration**: Uses service discovery to find Prometheus services with federation endpoints
+### 2. Static Target Configuration
+- **File**: Embedded in `federation-scrape-config.yaml`
+- **Purpose**: Direct connection to known Prometheus services in production/staging clusters
+- **Configuration**: Uses static targets to connect to Prometheus federation endpoints
 
 ### 3. RBAC Configuration
 - **File**: `hub/monitoring/controllers/kube-prometheus-stack/monitoring-rbac.yaml`
@@ -66,14 +66,15 @@ kubernetes_build_info{cluster=~"production|staging"}
 node_info{cluster=~"production|staging"}
 ```
 
-### 3. Check ServiceMonitor Status
+### 3. Verify Static Target Configuration
 ```bash
-# List ServiceMonitors
-kubectl get servicemonitors -n monitoring
+# Check the federation scrape configuration
+kubectl get configmap flux-prometheus-federation -n monitoring -o yaml
 
-# Check ServiceMonitor details
-kubectl describe servicemonitor production-prometheus-federation -n monitoring
-kubectl describe servicemonitor staging-prometheus-federation -n monitoring
+# Look for the static_configs section with production and staging targets
+# Expected targets:
+# - kube-prometheus-stack-prometheus.production.svc.cluster.local:9090
+# - kube-prometheus-stack-prometheus.staging.svc.cluster.local:9090
 ```
 
 ### 4. Verify Federation Endpoints
@@ -132,6 +133,7 @@ kubectl get endpoints -n staging
 ## Notes
 
 - The configuration assumes that production and staging Prometheus instances are running in their respective namespaces
-- Metrics are collected every 30 seconds from federation endpoints
-- The setup uses Kubernetes service discovery to automatically find Prometheus services
+- Metrics are collected every 30 seconds from federation endpoints  
+- The setup uses static target configuration to connect to known Prometheus services
+- Expected service names: `kube-prometheus-stack-prometheus` or `prometheus-operated`
 - All collected metrics are preserved with their original labels, plus an additional `cluster` label

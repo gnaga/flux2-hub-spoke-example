@@ -28,22 +28,14 @@ data:
           - '{__name__=~"controller_runtime_.*"}'
           # Application metrics
           - '{__name__=~"up|.*_total|.*_duration_.*|.*_info"}'
-      kubernetes_sd_configs:
-        - role: service
-          namespaces:
-            names:
-              - production
+      static_configs:
+        - targets:
+            # These targets will be automatically discovered when Prometheus services are available
+            # Format: service-name.namespace.svc.cluster.local:port
+            - 'kube-prometheus-stack-prometheus.production.svc.cluster.local:9090'
+            - 'prometheus-operated.production.svc.cluster.local:9090'
       relabel_configs:
-        - source_labels: [__meta_kubernetes_service_name]
-          target_label: __meta_kubernetes_service_name
-          regex: '.*prometheus.*'
-          action: keep
-        - source_labels: [__meta_kubernetes_service_port_name]
-          target_label: __meta_kubernetes_service_port_name  
-          regex: 'web|http'
-          action: keep
-        - source_labels: [__meta_kubernetes_service_name]
-          target_label: cluster
+        - target_label: cluster
           replacement: 'production'
         - source_labels: [__address__]
           target_label: __address__
@@ -70,22 +62,14 @@ data:
           - '{__name__=~"controller_runtime_.*"}'
           # Application metrics
           - '{__name__=~"up|.*_total|.*_duration_.*|.*_info"}'
-      kubernetes_sd_configs:
-        - role: service
-          namespaces:
-            names:
-              - staging
+      static_configs:
+        - targets:
+            # These targets will be automatically discovered when Prometheus services are available
+            # Format: service-name.namespace.svc.cluster.local:port
+            - 'kube-prometheus-stack-prometheus.staging.svc.cluster.local:9090'
+            - 'prometheus-operated.staging.svc.cluster.local:9090'
       relabel_configs:
-        - source_labels: [__meta_kubernetes_service_name]
-          target_label: __meta_kubernetes_service_name
-          regex: '.*prometheus.*'
-          action: keep
-        - source_labels: [__meta_kubernetes_service_port_name]
-          target_label: __meta_kubernetes_service_port_name
-          regex: 'web|http'
-          action: keep
-        - source_labels: [__meta_kubernetes_service_name]
-          target_label: cluster
+        - target_label: cluster
           replacement: 'staging'
         - source_labels: [__address__]
           target_label: __address__
