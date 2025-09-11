@@ -54,7 +54,7 @@ spec:
         
         # Remote write configuration to hub cluster
         remoteWrite:
-          - url: "http://10.96.235.11:9090/api/v1/write"
+          - url: "http://YOUR-HUB-PROMETHEUS-LOADBALANCER:9090/api/v1/write"
             writeRelabelConfigs:
               # Add cluster label to identify metrics source
               - targetLabel: cluster

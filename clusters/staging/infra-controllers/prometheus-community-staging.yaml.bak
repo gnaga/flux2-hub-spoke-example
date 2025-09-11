@@ -35,66 +35,66 @@ spec:
         retention: "2h"
         retentionSize: "1GB"
         
-        # Reduced resource allocation
+        # Even more reduced resource allocation for staging
         resources:
           requests:
-            memory: "400Mi"
-            cpu: "100m"
+            memory: "300Mi"
+            cpu: "75m"
           limits:
-            memory: "800Mi" 
-            cpu: "200m"
+            memory: "600Mi" 
+            cpu: "150m"
         
-        # Storage configuration
+        # Storage configuration - smaller for staging
         storageSpec:
           volumeClaimTemplate:
             spec:
               resources:
                 requests:
-                  storage: 2Gi
+                  storage: 1Gi
         
         # Remote write configuration to hub cluster
         remoteWrite:
-          - url: "http://10.96.235.11:9090/api/v1/write"
+          - url: "http://YOUR-HUB-PROMETHEUS-LOADBALANCER:9090/api/v1/write"
             writeRelabelConfigs:
               # Add cluster label to identify metrics source
               - targetLabel: cluster
-                replacement: "production"
+                replacement: "staging"
               # Add origin prometheus label
               - targetLabel: origin_prometheus
-                replacement: "production-prometheus"
+                replacement: "staging-prometheus"
             queueConfig:
-              capacity: 10000
-              maxShards: 50
-              maxSamplesPerSend: 2000
+              capacity: 5000
+              maxShards: 25
+              maxSamplesPerSend: 1000
               batchSendDeadline: 5s
               minBackoff: 30ms
               maxBackoff: 100ms
         
         # External labels
         externalLabels:
-          cluster: "production"
-          environment: "production"
+          cluster: "staging"
+          environment: "staging"
 
     # Keep kube-state-metrics for cluster-specific metrics
     kube-state-metrics:
       enabled: true
       resources:
         requests:
-          memory: "128Mi"
-          cpu: "50m"
+          memory: "96Mi"
+          cpu: "25m"
         limits:
-          memory: "256Mi"
-          cpu: "100m"
+          memory: "192Mi"
+          cpu: "50m"
 
     # Keep node-exporter for node metrics
     nodeExporter:
       enabled: true
       resources:
         requests:
-          memory: "64Mi"
+          memory: "48Mi"
           cpu: "25m"
         limits:
-          memory: "128Mi"
+          memory: "96Mi"
           cpu: "50m"
 
     # Simplified Prometheus Operator configuration
@@ -110,8 +110,8 @@ spec:
       # Reduced resource allocation
       resources:
         requests:
-          memory: "128Mi"
-          cpu: "50m"
+          memory: "96Mi"
+          cpu: "25m"
         limits:
-          memory: "256Mi"
-          cpu: "100m"
+          memory: "192Mi"
+          cpu: "50m"

@@ -1,24 +1,117 @@
 apiVersion: helm.toolkit.fluxcd.io/v2beta2
 kind: HelmRelease
 metadata:
-  name: prometheus-community
+  name: kube-prometheus-stack
   namespace: monitoring
 spec:
   targetNamespace: monitoring
-  storageNamespace: monitoring
-  releaseName: prometheus-community
+  releaseName: kube-prometheus-stack
   interval: 30m
   chart:
     spec:
       chart: kube-prometheus-stack
-      version: "*"
+      version: "61.x"
       sourceRef:
         kind: HelmRepository
         name: prometheus-community
       interval: 12h
+  install:
+    crds: Create
+  upgrade:
+    crds: CreateReplace
   values:
+    # Disable Grafana - centralized in hub cluster
+    grafana:
+      enabled: false
+
+    # Disable AlertManager - centralized in hub cluster  
+    alertmanager:
+      enabled: false
+
+    # Configure Prometheus with minimal resources and remote write
     prometheus:
-      enabled: true
       prometheusSpec:
+        # Minimal retention since metrics are sent to hub
+        retention: "2h"
+        retentionSize: "1GB"
+        
+        # Even more reduced resource allocation for staging
+        resources:
+          requests:
+            memory: "300Mi"
+            cpu: "75m"
+          limits:
+            memory: "600Mi" 
+            cpu: "150m"
+        
+        # Storage configuration - smaller for staging
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              resources:
+                requests:
+                  storage: 1Gi
+        
+        # Remote write configuration to hub cluster
+        remoteWrite:
+          - url: "http://10.96.235.11:9090/api/v1/write"
+            writeRelabelConfigs:
+              # Add cluster label to identify metrics source
+              - targetLabel: cluster
+                replacement: "staging"
+              # Add origin prometheus label
+              - targetLabel: origin_prometheus
+                replacement: "staging-prometheus"
+            queueConfig:
+              capacity: 5000
+              maxShards: 25
+              maxSamplesPerSend: 1000
+              batchSendDeadline: 5s
+              minBackoff: 30ms
+              maxBackoff: 100ms
+        
+        # External labels
         externalLabels:
-        cluster: "staging-cluster" 
+          cluster: "staging"
+          environment: "staging"
+
+    # Keep kube-state-metrics for cluster-specific metrics
+    kube-state-metrics:
+      enabled: true
+      resources:
+        requests:
+          memory: "96Mi"
+          cpu: "25m"
+        limits:
+          memory: "192Mi"
+          cpu: "50m"
+
+    # Keep node-exporter for node metrics
+    nodeExporter:
+      enabled: true
+      resources:
+        requests:
+          memory: "48Mi"
+          cpu: "25m"
+        limits:
+          memory: "96Mi"
+          cpu: "50m"
+
+    # Simplified Prometheus Operator configuration
+    prometheusOperator:
+      # Disable admission webhooks for simplicity
+      admissionWebhooks:
+        enabled: false
+      
+      # Disable TLS for internal communication
+      tls:
+        enabled: false
+        
+      # Reduced resource allocation
+      resources:
+        requests:
+          memory: "96Mi"
+          cpu: "25m"
+        limits:
+          memory: "192Mi"
+          cpu: "50m"
