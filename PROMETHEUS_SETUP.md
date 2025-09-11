@@ -56,8 +56,14 @@ echo "Hub Prometheus LoadBalancer: $LOADBALANCER_IP"
 # Switch to production cluster context
 kubectl config use-context production-cluster
 
-# Apply the configuration
-kubectl apply -k clusters/production/
+# IMPORTANT: Deploy HelmRepository first to avoid "not found" errors
+kubectl apply -f clusters/production/infra-controllers/prometheus-repository.yaml
+
+# Wait for HelmRepository to be ready
+kubectl wait --for=condition=Ready helmrepository/prometheus-community -n monitoring --timeout=300s
+
+# Apply the full configuration
+kubectl apply -k clusters/production/infra-controllers/
 ```
 
 ### 5. Deploy to Staging Cluster
@@ -65,8 +71,14 @@ kubectl apply -k clusters/production/
 # Switch to staging cluster context
 kubectl config use-context staging-cluster
 
-# Apply the configuration
-kubectl apply -k clusters/staging/
+# IMPORTANT: Deploy HelmRepository first to avoid "not found" errors
+kubectl apply -f clusters/staging/infra-controllers/prometheus-repository.yaml
+
+# Wait for HelmRepository to be ready
+kubectl wait --for=condition=Ready helmrepository/prometheus-community -n monitoring --timeout=300s
+
+# Apply the full configuration
+kubectl apply -k clusters/staging/infra-controllers/
 ```
 
 ## Verification
