@@ -27,6 +27,8 @@ spec:
     alertmanager:
       enabled: false
     prometheus:
+      service:
+        type: LoadBalancer
       prometheusSpec:
         # Enable remote write receiver
         enableRemoteWriteReceiver: true

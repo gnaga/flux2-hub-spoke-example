@@ -178,7 +178,7 @@ data:
                   regex: true
 
           remote_write:
-            - url: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+            - url: http://<LOADBALANCER-IP>:9090/api/v1/write
               external_labels:
                 cluster: 'production'
                 environment: 'production'

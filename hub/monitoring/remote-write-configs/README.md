@@ -33,6 +33,9 @@ Lightweight kube-prometheus-stack Helm values for production cluster deployment.
 ### staging-lightweight-values.yaml
 Lightweight kube-prometheus-stack Helm values for staging cluster deployment.
 
+### configure-loadbalancer.sh
+Helper script to automatically configure LoadBalancer endpoints in all configuration files.
+
 ## Lightweight kube-prometheus-stack for Source Clusters
 
 Since monitoring is centralized in the hub cluster, production and staging clusters should use a lightweight kube-prometheus-stack configuration. This reduces resource usage while still providing metric collection capabilities.
@@ -103,20 +106,64 @@ prometheusOperator:
 
 ### Customizing the Hub Endpoint
 
-Before deploying, update the remote write URL in the lightweight values files:
+#### Option 1: Using the Helper Script (Recommended)
 
 ```bash
-# Edit the production configuration
-sed -i 's|YOUR-HUB-PROMETHEUS-ENDPOINT|your-actual-hub-endpoint|g' production-lightweight-values.yaml
-
-# Edit the staging configuration  
-sed -i 's|YOUR-HUB-PROMETHEUS-ENDPOINT|your-actual-hub-endpoint|g' staging-lightweight-values.yaml
+# Run the automated configuration script
+./configure-loadbalancer.sh
 ```
 
-Example endpoints:
-- **Internal Service**: `kube-prometheus-stack-prometheus.monitoring.svc.cluster.local`
-- **External Ingress**: `prometheus.hub.example.com`
-- **LoadBalancer**: `10.0.0.100`
+This script will:
+- Automatically detect the LoadBalancer IP/hostname
+- Update all configuration files
+- Test connectivity (optional)
+- Provide next steps
+
+#### Option 2: Manual Configuration
+
+```bash
+# Get the LoadBalancer IP from the hub cluster
+LOADBALANCER_IP=$(kubectl get svc kube-prometheus-stack-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Edit the production configuration
+sed -i "s|YOUR-HUB-PROMETHEUS-ENDPOINT|${LOADBALANCER_IP}|g" production-lightweight-values.yaml
+
+# Edit the staging configuration  
+sed -i "s|YOUR-HUB-PROMETHEUS-ENDPOINT|${LOADBALANCER_IP}|g" staging-lightweight-values.yaml
+```
+
+Example endpoints with LoadBalancer:
+- **AWS ELB**: `a1b2c3d4e5f6-12345.us-west-2.elb.amazonaws.com`
+- **GCP Load Balancer**: `35.123.456.789`
+- **Azure Load Balancer**: `20.123.456.789`
+
+## Security Considerations
+
+**Important**: The LoadBalancer exposes Prometheus publicly. Consider these security measures:
+
+1. **Network Policies**: Restrict access to specific source IPs
+   ```yaml
+   prometheus:
+     service:
+       type: LoadBalancer
+       loadBalancerSourceRanges:
+         - 10.0.0.0/8    # Production cluster CIDR
+         - 172.16.0.0/12 # Staging cluster CIDR
+   ```
+
+2. **Authentication**: Enable basic auth or OAuth
+   ```yaml
+   prometheus:
+     prometheusSpec:
+       web:
+         httpConfig:
+           http2: false
+         tlsConfig: {}
+   ```
+
+3. **TLS/HTTPS**: Configure TLS certificates for encrypted communication
+
+4. **Firewall Rules**: Configure cloud provider firewall rules to restrict access
 
 ## Usage
 
@@ -157,8 +204,9 @@ Example endpoints:
 ## Network Requirements
 
 - Production and staging Prometheus instances must be able to reach the hub cluster's Prometheus service
-- Default endpoint: `http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write`
-- For cross-cluster setup, you may need to use external service endpoints or ingress
+- Hub Prometheus is exposed via LoadBalancer service for cross-cluster access
+- Default endpoint: `http://<LOADBALANCER-IP>:9090/api/v1/write`
+- Replace `<LOADBALANCER-IP>` with the external IP assigned by your cloud provider
 
 ## Monitoring Remote Write
 

@@ -141,8 +141,12 @@ kubectl logs -n monitoring deployment/prometheus-kube-prometheus-stack-prometheu
 # Verify RBAC permissions
 kubectl auth can-i create services --as=system:serviceaccount:monitoring:prometheus-remote-write
 
-# Check remote write endpoint availability
+# Check LoadBalancer IP assignment
 kubectl get svc -n monitoring kube-prometheus-stack-prometheus
+
+# Get the external IP
+LOADBALANCER_IP=$(kubectl get svc kube-prometheus-stack-prometheus -n monitoring -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo "Hub Prometheus LoadBalancer IP: $LOADBALANCER_IP"
 
 # Monitor remote write metrics
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
@@ -173,7 +177,7 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:909
    - Configure remote write to forward metrics to hub cluster
    - Apply remote write ConfigMaps
 
-4. **Network Configuration**: Ensure clusters can reach each other's Prometheus services
+4. **Network Configuration**: Ensure production/staging clusters can reach the hub cluster's LoadBalancer IP
 
 5. **Monitoring**: Use provided metrics to monitor remote write health
 
