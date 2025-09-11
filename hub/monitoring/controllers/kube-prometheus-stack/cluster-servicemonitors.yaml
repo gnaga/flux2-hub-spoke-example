@@ -1,0 +1,80 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: production-prometheus-federation
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: flux
+    app.kubernetes.io/component: monitoring
+    cluster: production
+spec:
+  jobLabel: cluster
+  namespaceSelector:
+    matchNames:
+      - production
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  endpoints:
+    - port: http-web
+      interval: 30s
+      path: /federate
+      params:
+        match[]:
+          - '{job="apiserver"}'
+          - '{job="kube-state-metrics"}'
+          - '{job="kubelet"}'
+          - '{job="node-exporter"}'
+          - '{job="cadvisor"}'
+          - '{job="flux-system"}'
+          - '{__name__=~"gotk_.*"}'
+          - '{__name__=~"controller_runtime_.*"}'
+          - '{__name__=~"up|.*_total|.*_duration_.*|.*_info"}'
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "prometheus_.*"
+          action: drop
+        - targetLabel: cluster
+          replacement: production
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: staging-prometheus-federation
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: flux
+    app.kubernetes.io/component: monitoring
+    cluster: staging
+spec:
+  jobLabel: cluster
+  namespaceSelector:
+    matchNames:
+      - staging
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  endpoints:
+    - port: http-web
+      interval: 30s
+      path: /federate
+      params:
+        match[]:
+          - '{job="apiserver"}'
+          - '{job="kube-state-metrics"}'
+          - '{job="kubelet"}'
+          - '{job="node-exporter"}'
+          - '{job="cadvisor"}'
+          - '{job="flux-system"}'
+          - '{__name__=~"gotk_.*"}'
+          - '{__name__=~"controller_runtime_.*"}'
+          - '{__name__=~"up|.*_total|.*_duration_.*|.*_info"}'
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "prometheus_.*"
+          action: drop
+        - targetLabel: cluster
+          replacement: staging

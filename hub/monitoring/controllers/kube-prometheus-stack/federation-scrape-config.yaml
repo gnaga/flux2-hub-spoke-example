@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flux-prometheus-federation
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: flux
+    app.kubernetes.io/component: monitoring
+data:
+  additional-scrape-configs.yaml: |
+    # Production cluster federation
+    - job_name: 'federate-production'
+      honor_labels: true
+      scrape_interval: 30s
+      scrape_timeout: 15s
+      metrics_path: '/federate'
+      params:
+        'match[]':
+          # Core Kubernetes metrics
+          - '{job="apiserver"}'
+          - '{job="kube-state-metrics"}'
+          - '{job="kubelet"}'
+          - '{job="node-exporter"}'
+          - '{job="cadvisor"}'
+          # Flux controller metrics
+          - '{job="flux-system"}'
+          - '{__name__=~"gotk_.*"}'
+          - '{__name__=~"controller_runtime_.*"}'
+          # Application metrics
+          - '{__name__=~"up|.*_total|.*_duration_.*|.*_info"}'
+      kubernetes_sd_configs:
+        - role: service
+          namespaces:
+            names:
+              - production
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name]
+          target_label: __meta_kubernetes_service_name
+          regex: '.*prometheus.*'
+          action: keep
+        - source_labels: [__meta_kubernetes_service_port_name]
+          target_label: __meta_kubernetes_service_port_name  
+          regex: 'web|http'
+          action: keep
+        - source_labels: [__meta_kubernetes_service_name]
+          target_label: cluster
+          replacement: 'production'
+        - source_labels: [__address__]
+          target_label: __address__
+          regex: '(.*)'
+          replacement: '${1}'
+    
+    # Staging cluster federation  
+    - job_name: 'federate-staging'
+      honor_labels: true
+      scrape_interval: 30s
+      scrape_timeout: 15s
+      metrics_path: '/federate'
+      params:
+        'match[]':
+          # Core Kubernetes metrics
+          - '{job="apiserver"}'
+          - '{job="kube-state-metrics"}'
+          - '{job="kubelet"}'
+          - '{job="node-exporter"}'
+          - '{job="cadvisor"}'
+          # Flux controller metrics
+          - '{job="flux-system"}'
+          - '{__name__=~"gotk_.*"}'
+          - '{__name__=~"controller_runtime_.*"}'
+          # Application metrics
+          - '{__name__=~"up|.*_total|.*_duration_.*|.*_info"}'
+      kubernetes_sd_configs:
+        - role: service
+          namespaces:
+            names:
+              - staging
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name]
+          target_label: __meta_kubernetes_service_name
+          regex: '.*prometheus.*'
+          action: keep
+        - source_labels: [__meta_kubernetes_service_port_name]
+          target_label: __meta_kubernetes_service_port_name
+          regex: 'web|http'
+          action: keep
+        - source_labels: [__meta_kubernetes_service_name]
+          target_label: cluster
+          replacement: 'staging'
+        - source_labels: [__address__]
+          target_label: __address__
+          regex: '(.*)'
+          replacement: '${1}'

@@ -28,6 +28,10 @@ spec:
       enabled: false
     prometheus:
       prometheusSpec:
+        additionalScrapeConfigsSecret:
+          enabled: true
+          name: "flux-prometheus-federation"
+          key: "additional-scrape-configs.yaml"
         retention: 24h
         resources:
           requests:
@@ -40,6 +44,7 @@ spec:
         podMonitorSelector:
           matchLabels:
             app.kubernetes.io/component: monitoring
+        serviceAccountName: prometheus-federation
     grafana:
       defaultDashboardsEnabled: false
       adminPassword: flux
