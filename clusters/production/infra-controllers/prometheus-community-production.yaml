@@ -1,0 +1,24 @@
+apiVersion: helm.toolkit.fluxcd.io/v2beta2
+kind: HelmRelease
+metadata:
+  name: prometheus-community
+  namespace: monitoring
+spec:
+  targetNamespace: monitoring
+  storageNamespace: monitoring
+  releaseName: prometheus-community
+  interval: 30m
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "*"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+      interval: 12h
+  values:
+    prometheus:
+      enabled: true
+      prometheusSpec:
+        externalLabels:
+        cluster: "production-cluster" 
